@@ -23,15 +23,51 @@ jobs:
           sha="$(git rev-parse HEAD)"
           echo "Building from commit $sha"
           sed -i "s/__PKG_SOURCE_VERSION__/$sha/" openwrt-build/uqmi/Makefile
-          cat openwrt-build/uqmi/Makefile | head -15
+          grep -E "PKG_(SOURCE_VERSION|MIRROR_HASH)" openwrt-build/uqmi/Makefile
 
       - name: Prepare feed layout
         run: |
           mkdir -p feed/utils
           cp -r openwrt-build/uqmi feed/utils/uqmi
-          ls -la feed/utils/uqmi/
 
-      - name: Build package
+      - name: Pull gh-action-sdk entrypoint
+        run: |
+          curl -sL https://raw.githubusercontent.com/openwrt/gh-action-sdk/main/entrypoint.sh -o /tmp/entrypoint.sh
+          chmod +x /tmp/entrypoint.sh
+
+      - name: First pass — capture computed PKG_MIRROR_HASH
+        continue-on-error: true
+        run: |
+          docker run --rm \
+            -v "$PWD":/github/workspace \
+            -v /tmp/entrypoint.sh:/entrypoint.sh \
+            --workdir /github/workspace \
+            -e ARCH=${{ matrix.arch }} \
+            -e FEED_DIR=/github/workspace/feed \
+            -e PACKAGES=uqmi \
+            -e NO_REFRESH_CHECK=1 \
+            -e NO_SHFMT_CHECK=1 \
+            --entrypoint /entrypoint.sh \
+            ghcr.io/openwrt/sdk:${{ matrix.arch }} 2>&1 | tee build-pass1.log
+          echo "first-pass exit captured"
+
+      - name: Patch Makefile with real hash
+        run: |
+          set -e
+          HASH=$(grep "PKG_MIRROR_HASH uses deprecated hash" build-pass1.log | head -1 | awk '{print $NF}')
+          if [ -z "$HASH" ]; then
+            echo "ERROR: could not extract hash from build log"
+            tail -80 build-pass1.log
+            exit 1
+          fi
+          echo "Real hash: $HASH"
+          sed -i "s|PKG_MIRROR_HASH:=skip|PKG_MIRROR_HASH:=$HASH|" openwrt-build/uqmi/Makefile
+          grep PKG_MIRROR_HASH openwrt-build/uqmi/Makefile
+          rm -rf feed
+          mkdir -p feed/utils
+          cp -r openwrt-build/uqmi feed/utils/uqmi
+
+      - name: Second pass — real build
         uses: openwrt/gh-action-sdk@v9
         env:
           ARCH: ${{ matrix.arch }}
