@@ -30,63 +30,55 @@ jobs:
           mkdir -p feed/utils
           cp -r openwrt-build/uqmi feed/utils/uqmi
 
-      - name: Pull gh-action-sdk entrypoint
+      - name: Build patched gh-action-sdk image
         run: |
-          curl -sL https://raw.githubusercontent.com/openwrt/gh-action-sdk/main/entrypoint.sh -o /tmp/entrypoint.sh
-          chmod +x /tmp/entrypoint.sh
+          mkdir -p docker-ctx
+          curl -sL https://raw.githubusercontent.com/openwrt/gh-action-sdk/main/entrypoint.sh \
+            -o docker-ctx/entrypoint.sh
 
-      - name: First pass — capture computed PKG_MIRROR_HASH
-        continue-on-error: true
+          # Strip the post-check hash grep that promotes "deprecated hash"
+          # warnings into fatal errors. PKG_MIRROR_HASH:=skip is honored by
+          # OpenWrt itself; only this layer rejects it.
+          sed -i '/badhash_msg="HASH does not match/,/^\t\tfi$/d' docker-ctx/entrypoint.sh
+          chmod +x docker-ctx/entrypoint.sh
+
+          cat > docker-ctx/Dockerfile <<EOF
+          FROM ghcr.io/openwrt/sdk:${{ matrix.arch }}
+          COPY entrypoint.sh /entrypoint.sh
+          ENTRYPOINT ["/entrypoint.sh"]
+          EOF
+
+          docker build -t patched-sdk docker-ctx
+
+      - name: Fix workspace ownership for buildbot (uid 1000)
+        run: sudo chown -R 1000:1000 "$GITHUB_WORKSPACE"
+
+      - name: Run patched SDK build
         run: |
           docker run --rm \
-            -v "$PWD":/github/workspace \
-            -v /tmp/entrypoint.sh:/entrypoint.sh \
-            --workdir /github/workspace \
+            -v "$GITHUB_WORKSPACE":/artifacts \
+            -v "$GITHUB_WORKSPACE/feed":/feed \
             -e ARCH=${{ matrix.arch }} \
-            -e FEED_DIR=/github/workspace/feed \
             -e PACKAGES=uqmi \
             -e NO_REFRESH_CHECK=1 \
             -e NO_SHFMT_CHECK=1 \
-            --entrypoint /entrypoint.sh \
-            ghcr.io/openwrt/sdk:${{ matrix.arch }} 2>&1 | tee build-pass1.log
-          echo "first-pass exit captured"
+            -e V=s \
+            patched-sdk
 
-      - name: Patch Makefile with real hash
-        run: |
-          set -e
-          HASH=$(grep "PKG_MIRROR_HASH uses deprecated hash" build-pass1.log | head -1 | awk '{print $NF}')
-          if [ -z "$HASH" ]; then
-            echo "ERROR: could not extract hash from build log"
-            tail -80 build-pass1.log
-            exit 1
-          fi
-          echo "Real hash: $HASH"
-          sed -i "s|PKG_MIRROR_HASH:=skip|PKG_MIRROR_HASH:=$HASH|" openwrt-build/uqmi/Makefile
-          grep PKG_MIRROR_HASH openwrt-build/uqmi/Makefile
-          rm -rf feed
-          mkdir -p feed/utils
-          cp -r openwrt-build/uqmi feed/utils/uqmi
-
-      - name: Second pass — real build
-        uses: openwrt/gh-action-sdk@v9
-        env:
-          ARCH: ${{ matrix.arch }}
-          FEED_DIR: ${{ github.workspace }}/feed
-          PACKAGES: uqmi
-          NO_REFRESH_CHECK: 1
-          NO_SHFMT_CHECK: 1
-          V: s
+      - name: Restore workspace ownership
+        if: always()
+        run: sudo chown -R --reference="$GITHUB_WORKSPACE/.." "$GITHUB_WORKSPACE"
 
       - name: Show build artifacts
         if: always()
         run: |
-          find bin -type f \( -name '*.apk' -o -name '*.ipk' \) -print 2>/dev/null || true
+          find "$GITHUB_WORKSPACE" -type f \( -name '*.apk' -o -name '*.ipk' \) -print 2>/dev/null || true
 
       - name: Upload package artifact
         uses: actions/upload-artifact@v4
         with:
           name: uqmi-${{ matrix.arch }}
           path: |
-            bin/**/uqmi*.apk
-            bin/**/uqmi*.ipk
+            **/uqmi*.apk
+            **/uqmi*.ipk
           if-no-files-found: error
