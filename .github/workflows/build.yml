@@ -1,0 +1,56 @@
+name: Build uqmi for OpenWrt
+
+on:
+  push:
+    branches: [master, main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build ${{ matrix.arch }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - mipsel_24kc-24.10
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Inject commit SHA into Makefile
+        run: |
+          sha="$(git rev-parse HEAD)"
+          echo "Building from commit $sha"
+          sed -i "s/__PKG_SOURCE_VERSION__/$sha/" openwrt-build/uqmi/Makefile
+          cat openwrt-build/uqmi/Makefile | head -15
+
+      - name: Prepare feed layout
+        run: |
+          mkdir -p feed/utils
+          cp -r openwrt-build/uqmi feed/utils/uqmi
+          ls -la feed/utils/uqmi/
+
+      - name: Build package
+        uses: openwrt/gh-action-sdk@v9
+        env:
+          ARCH: ${{ matrix.arch }}
+          FEED_DIR: ${{ github.workspace }}/feed
+          PACKAGES: uqmi
+          NO_REFRESH_CHECK: 1
+          NO_SHFMT_CHECK: 1
+          V: s
+
+      - name: Show build artifacts
+        if: always()
+        run: |
+          find bin -type f \( -name '*.apk' -o -name '*.ipk' \) -print 2>/dev/null || true
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: uqmi-${{ matrix.arch }}
+          path: |
+            bin/**/uqmi*.apk
+            bin/**/uqmi*.ipk
+          if-no-files-found: error
