@@ -22,6 +22,7 @@
 #define __uqmi_nas_commands \
 	__uqmi_command(nas_do_set_system_selection, __set-system-selection, no, QMI_SERVICE_NAS), \
 	__uqmi_command(nas_set_network_modes, set-network-modes, required, CMD_TYPE_OPTION), \
+	__uqmi_command(nas_set_lte_band, set-lte-band, required, CMD_TYPE_OPTION), \
 	__uqmi_command(nas_initiate_network_register, network-register, no, QMI_SERVICE_NAS), \
 	__uqmi_command(nas_set_plmn, set-plmn, no, QMI_SERVICE_NAS), \
 	__uqmi_command(nas_get_plmn, get-plmn, no, QMI_SERVICE_NAS), \
@@ -40,6 +41,8 @@
 #define nas_helptext \
 		"  --set-network-modes <modes>:      Set usable network modes (Syntax: <mode1>[,<mode2>,...])\n" \
 		"                                    Available modes: all, lte, umts, gsm, cdma, td-scdma, 5gnr\n" \
+		"  --set-lte-band <bands>:           Set LTE band preference (Syntax: <band1>[,<band2>,...])\n" \
+		"                                    Bands: 1-14, 17-21, 24-43 (e.g. 3,7,20)\n" \
 		"  --set-network-preference <mode>:  Set preferred network mode to <mode>\n" \
 		"                                    Available modes: auto, gsm, wcdma\n" \
 		"  --set-network-roaming <mode>:     Set roaming preference:\n" \

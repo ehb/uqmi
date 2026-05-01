@@ -192,6 +192,89 @@ cmd_nas_set_network_modes_prepare(struct qmi_dev *qmi, struct qmi_request *req, 
 	return do_sel_network();
 }
 
+#define cmd_nas_set_lte_band_cb no_cb
+static enum qmi_cmd_result
+cmd_nas_set_lte_band_prepare(struct qmi_dev *qmi, struct qmi_request *req, struct qmi_msg *msg, char *arg)
+{
+	static const struct {
+		unsigned int band;
+		QmiNasLteBandPreference val;
+	} bands[] = {
+		{  1, QMI_NAS_LTE_BAND_PREFERENCE_EUTRAN_1  },
+		{  2, QMI_NAS_LTE_BAND_PREFERENCE_EUTRAN_2  },
+		{  3, QMI_NAS_LTE_BAND_PREFERENCE_EUTRAN_3  },
+		{  4, QMI_NAS_LTE_BAND_PREFERENCE_EUTRAN_4  },
+		{  5, QMI_NAS_LTE_BAND_PREFERENCE_EUTRAN_5  },
+		{  6, QMI_NAS_LTE_BAND_PREFERENCE_EUTRAN_6  },
+		{  7, QMI_NAS_LTE_BAND_PREFERENCE_EUTRAN_7  },
+		{  8, QMI_NAS_LTE_BAND_PREFERENCE_EUTRAN_8  },
+		{  9, QMI_NAS_LTE_BAND_PREFERENCE_EUTRAN_9  },
+		{ 10, QMI_NAS_LTE_BAND_PREFERENCE_EUTRAN_10 },
+		{ 11, QMI_NAS_LTE_BAND_PREFERENCE_EUTRAN_11 },
+		{ 12, QMI_NAS_LTE_BAND_PREFERENCE_EUTRAN_12 },
+		{ 13, QMI_NAS_LTE_BAND_PREFERENCE_EUTRAN_13 },
+		{ 14, QMI_NAS_LTE_BAND_PREFERENCE_EUTRAN_14 },
+		{ 17, QMI_NAS_LTE_BAND_PREFERENCE_EUTRAN_17 },
+		{ 18, QMI_NAS_LTE_BAND_PREFERENCE_EUTRAN_18 },
+		{ 19, QMI_NAS_LTE_BAND_PREFERENCE_EUTRAN_19 },
+		{ 20, QMI_NAS_LTE_BAND_PREFERENCE_EUTRAN_20 },
+		{ 21, QMI_NAS_LTE_BAND_PREFERENCE_EUTRAN_21 },
+		{ 24, QMI_NAS_LTE_BAND_PREFERENCE_EUTRAN_24 },
+		{ 25, QMI_NAS_LTE_BAND_PREFERENCE_EUTRAN_25 },
+		{ 26, QMI_NAS_LTE_BAND_PREFERENCE_EUTRAN_26 },
+		{ 27, QMI_NAS_LTE_BAND_PREFERENCE_EUTRAN_27 },
+		{ 28, QMI_NAS_LTE_BAND_PREFERENCE_EUTRAN_28 },
+		{ 29, QMI_NAS_LTE_BAND_PREFERENCE_EUTRAN_29 },
+		{ 30, QMI_NAS_LTE_BAND_PREFERENCE_EUTRAN_30 },
+		{ 31, QMI_NAS_LTE_BAND_PREFERENCE_EUTRAN_31 },
+		{ 32, QMI_NAS_LTE_BAND_PREFERENCE_EUTRAN_32 },
+		{ 33, QMI_NAS_LTE_BAND_PREFERENCE_EUTRAN_33 },
+		{ 34, QMI_NAS_LTE_BAND_PREFERENCE_EUTRAN_34 },
+		{ 35, QMI_NAS_LTE_BAND_PREFERENCE_EUTRAN_35 },
+		{ 36, QMI_NAS_LTE_BAND_PREFERENCE_EUTRAN_36 },
+		{ 37, QMI_NAS_LTE_BAND_PREFERENCE_EUTRAN_37 },
+		{ 38, QMI_NAS_LTE_BAND_PREFERENCE_EUTRAN_38 },
+		{ 39, QMI_NAS_LTE_BAND_PREFERENCE_EUTRAN_39 },
+		{ 40, QMI_NAS_LTE_BAND_PREFERENCE_EUTRAN_40 },
+		{ 41, QMI_NAS_LTE_BAND_PREFERENCE_EUTRAN_41 },
+		{ 42, QMI_NAS_LTE_BAND_PREFERENCE_EUTRAN_42 },
+		{ 43, QMI_NAS_LTE_BAND_PREFERENCE_EUTRAN_43 },
+	};
+	QmiNasLteBandPreference val = 0;
+	char *word;
+	int i;
+
+	for (word = strtok(arg, ",");
+	     word;
+	     word = strtok(NULL, ",")) {
+		bool found = false;
+		unsigned long band;
+		char *err;
+
+		band = strtoul(word, &err, 10);
+		if (err && *err) {
+			uqmi_add_error("Invalid LTE band number");
+			return QMI_CMD_EXIT;
+		}
+
+		for (i = 0; i < ARRAY_SIZE(bands); i++) {
+			if (bands[i].band == band) {
+				val |= bands[i].val;
+				found = true;
+				break;
+			}
+		}
+
+		if (!found) {
+			uqmi_add_error("Unsupported LTE band");
+			return QMI_CMD_EXIT;
+		}
+	}
+
+	qmi_set(&sel_req, lte_band_preference, val);
+	return do_sel_network();
+}
+
 #define cmd_nas_set_network_preference_cb no_cb
 static enum qmi_cmd_result
 cmd_nas_set_network_preference_prepare(struct qmi_dev *qmi, struct qmi_request *req, struct qmi_msg *msg, char *arg)
